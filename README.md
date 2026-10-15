@@ -1,8 +1,10 @@
 # Brief
 
-Brief is a personal job watch. You write down the roles you want. Once a day it reads the newest postings on public job boards and notifies you when something fits.
+Brief is a personal job watch. You write down the roles you want. Once a day it reads the newest postings and notifies you when something fits.
 
-It is a daily net for fresh listings, not a search of every job on the internet. The boards it reads are [Himalayas](https://himalayas.app), [Remote OK](https://remoteok.com), [Jobicy](https://jobicy.com), [Arbeitnow](https://www.arbeitnow.com), and [Remotive](https://remotive.com). Each role opens the original posting.
+It is a daily net for fresh listings, not a search of every job on the internet. It reads [LinkedIn](https://www.linkedin.com/jobs) for your titles, the daily new-grad and H-1B lists [Jobright](https://jobright.ai) publishes, plus [Himalayas](https://himalayas.app), [Remote OK](https://remoteok.com), [Jobicy](https://jobicy.com), [Arbeitnow](https://www.arbeitnow.com), and [Remotive](https://remotive.com). Each role opens the original posting.
+
+A watch can require visa sponsorship, new-grad roles, or both. Sponsorship keeps postings that say they sponsor, LinkedIn results from a visa-sponsorship search, and Jobright’s H-1B list. New grad keeps entry-level and new-graduate titles, including Jobright’s new-grad lists and LinkedIn’s entry-level filter. Senior, staff, and director titles are left out of a new-grad watch. A place of United States also matches US cities and states. Leave the place blank to include remote roles with no city.
 
 ## Run it
 

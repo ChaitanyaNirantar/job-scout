@@ -1,9 +1,12 @@
-import { sourceLabel } from "@/lib/sources";
+import { fetchJobrightJobs } from "@/lib/jobright";
+import { fetchLinkedInJobs } from "@/lib/linkedin";
+import { keepJobs, type DraftJob } from "@/lib/normalize";
+import { searchKey, searchesFromWatches } from "@/lib/searches";
+import { sourceLabel, SOURCES } from "@/lib/sources";
 import { excerpt } from "@/lib/text";
 import type { Database, FeedJob, SourceId } from "@/lib/types";
 
 const USER_AGENT = "Mozilla/5.0 (compatible; BriefJobWatch/1.0)";
-const MAX_AGE_MS = 21 * 24 * 60 * 60 * 1000;
 export const FEED_TTL_MS = 6 * 60 * 60 * 1000;
 
 type SourceFetcher = {
@@ -84,27 +87,8 @@ function money(min: number | null, max: number | null, currency = "USD"): string
   return format(lower ?? upper ?? 0);
 }
 
-function recent(job: FeedJob): boolean {
-  const posted = new Date(job.postedAt).getTime();
-  if (Number.isNaN(posted)) return false;
-  return Date.now() - posted <= MAX_AGE_MS && posted <= Date.now() + 60 * 60 * 1000;
-}
-
-function keep(jobs: FeedJob[]): FeedJob[] {
-  const seen = new Set<string>();
-  const kept: FeedJob[] = [];
-  for (const job of jobs) {
-    if (!job.title || !job.url || !job.id) continue;
-    if (!recent(job)) continue;
-    if (seen.has(job.id)) continue;
-    seen.add(job.id);
-    kept.push(job);
-  }
-  return kept;
-}
-
 async function fetchHimalayas(): Promise<FeedJob[]> {
-  const jobs: FeedJob[] = [];
+  const jobs: DraftJob[] = [];
   let cursor = "";
   for (let page = 0; page < 3; page += 1) {
     const url = new URL("https://himalayas.app/jobs/api");
@@ -136,7 +120,7 @@ async function fetchHimalayas(): Promise<FeedJob[]> {
     cursor = str(data?.nextCursor);
     if (!cursor) break;
   }
-  return keep(jobs);
+  return keepJobs(jobs);
 }
 
 async function fetchRemoteOk(): Promise<FeedJob[]> {
@@ -147,7 +131,7 @@ async function fetchRemoteOk(): Promise<FeedJob[]> {
     const id = str(record.id) || str(record.slug);
     const min = typeof record.salary_min === "number" ? record.salary_min : null;
     const max = typeof record.salary_max === "number" ? record.salary_max : null;
-    const job: FeedJob = {
+    const job: DraftJob = {
       id: `remoteok:${id}`,
       source: "remoteok",
       title: str(record.position),
@@ -162,7 +146,7 @@ async function fetchRemoteOk(): Promise<FeedJob[]> {
     };
     return [job];
   });
-  return keep(jobs);
+  return keepJobs(jobs);
 }
 
 async function fetchJobicy(): Promise<FeedJob[]> {
@@ -171,7 +155,7 @@ async function fetchJobicy(): Promise<FeedJob[]> {
     const record = asRecord(item);
     if (!record) return [];
     const id = String(record.id ?? "");
-    const job: FeedJob = {
+    const job: DraftJob = {
       id: `jobicy:${id}`,
       source: "jobicy",
       title: str(record.jobTitle),
@@ -186,7 +170,7 @@ async function fetchJobicy(): Promise<FeedJob[]> {
     };
     return [job];
   });
-  return keep(jobs);
+  return keepJobs(jobs);
 }
 
 async function fetchArbeitnow(): Promise<FeedJob[]> {
@@ -195,7 +179,7 @@ async function fetchArbeitnow(): Promise<FeedJob[]> {
     const record = asRecord(item);
     if (!record) return [];
     const slug = str(record.slug);
-    const job: FeedJob = {
+    const job: DraftJob = {
       id: `arbeitnow:${slug}`,
       source: "arbeitnow",
       title: str(record.title),
@@ -210,7 +194,7 @@ async function fetchArbeitnow(): Promise<FeedJob[]> {
     };
     return [job];
   });
-  return keep(jobs);
+  return keepJobs(jobs);
 }
 
 async function fetchRemotive(): Promise<FeedJob[]> {
@@ -220,7 +204,7 @@ async function fetchRemotive(): Promise<FeedJob[]> {
     if (!record) return [];
     const id = String(record.id ?? "");
     const salary = str(record.salary);
-    const job: FeedJob = {
+    const job: DraftJob = {
       id: `remotive:${id}`,
       source: "remotive",
       title: str(record.title),
@@ -235,7 +219,7 @@ async function fetchRemotive(): Promise<FeedJob[]> {
     };
     return [job];
   });
-  return keep(jobs);
+  return keepJobs(jobs);
 }
 
 const FETCHERS: SourceFetcher[] = [
@@ -246,13 +230,42 @@ const FETCHERS: SourceFetcher[] = [
   { id: "remotive", fetch: fetchRemotive },
 ];
 
+async function refreshCached(
+  db: Database,
+  id: SourceId,
+  queryKey: string,
+  load: () => Promise<{ jobs: DraftJob[]; error: string | null }>,
+) {
+  const cached = db.feedCache[id];
+  const fetchedAt = cached ? new Date(cached.fetchedAt).getTime() : 0;
+  if (cached && cached.queryKey === queryKey && Date.now() - fetchedAt < FEED_TTL_MS) {
+    db.feedStatus[id] = { fetchedAt: cached.fetchedAt, count: cached.jobs.length, error: null };
+    return;
+  }
+  const result = await load();
+  // An empty failure must not become a six-hour cache, or a 429 hides the source until the TTL expires.
+  if (result.jobs.length === 0 && result.error) {
+    db.feedStatus[id] = {
+      fetchedAt: cached?.fetchedAt ?? null,
+      count: cached?.jobs.length ?? 0,
+      error: result.error,
+    };
+    return;
+  }
+  const stamp = new Date().toISOString();
+  const jobs = keepJobs(result.jobs);
+  db.feedCache[id] = { fetchedAt: stamp, jobs, queryKey };
+  db.feedStatus[id] = { fetchedAt: stamp, count: jobs.length, error: result.error };
+}
+
 export async function refreshFeeds(db: Database): Promise<void> {
-  const now = Date.now();
-  await Promise.all(
-    FETCHERS.map(async (source) => {
+  const searches = searchesFromWatches(db.watches);
+  const linkedInKey = searchKey(searches);
+  await Promise.all([
+    ...FETCHERS.map(async (source) => {
       const cached = db.feedCache[source.id];
       const fetchedAt = cached ? new Date(cached.fetchedAt).getTime() : 0;
-      if (cached && now - fetchedAt < FEED_TTL_MS) {
+      if (cached && Date.now() - fetchedAt < FEED_TTL_MS) {
         db.feedStatus[source.id] = {
           fetchedAt: cached.fetchedAt,
           count: cached.jobs.length,
@@ -274,21 +287,28 @@ export async function refreshFeeds(db: Database): Promise<void> {
         };
       }
     }),
-  );
+    refreshCached(db, "linkedin", linkedInKey, () => fetchLinkedInJobs(searches)),
+    refreshCached(db, "jobright", "published-lists", () => fetchJobrightJobs()),
+  ]);
 }
 
 export function cachedJobs(db: Database): FeedJob[] {
   const seenUrls = new Set<string>();
   const seenLoose = new Set<string>();
   const jobs: FeedJob[] = [];
-  for (const source of FETCHERS) {
+  for (const source of SOURCES) {
     for (const job of db.feedCache[source.id]?.jobs ?? []) {
-      const urlKey = job.url.toLowerCase();
-      const loose = `${job.company.toLowerCase()}|${job.title.toLowerCase()}`;
+      const hydrated: FeedJob = {
+        ...job,
+        sponsorship: job.sponsorship ?? "unknown",
+        newGrad: job.newGrad ?? false,
+      };
+      const urlKey = hydrated.url.toLowerCase();
+      const loose = `${hydrated.company.toLowerCase()}|${hydrated.title.toLowerCase()}`;
       if (seenUrls.has(urlKey) || seenLoose.has(loose)) continue;
       seenUrls.add(urlKey);
       seenLoose.add(loose);
-      jobs.push(job);
+      jobs.push(hydrated);
     }
   }
   return jobs;

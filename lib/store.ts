@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Database, Settings } from "@/lib/types";
+import type { Database, SavedJob, Settings, Watch } from "@/lib/types";
 
 const dataFile = path.join(process.cwd(), "data", "brief.json");
 
@@ -32,6 +32,22 @@ export function emptyDb(): Database {
   };
 }
 
+function normalizeWatch(watch: Watch): Watch {
+  return {
+    ...watch,
+    sponsorship: watch.sponsorship === "required" ? "required" : "any",
+    newGradOnly: watch.newGradOnly === true,
+  };
+}
+
+function normalizeJob(job: SavedJob): SavedJob {
+  return {
+    ...job,
+    sponsorship: job.sponsorship ?? "unknown",
+    newGrad: job.newGrad === true,
+  };
+}
+
 function readDb(): Database {
   try {
     const raw = fs.readFileSync(dataFile, "utf8");
@@ -40,8 +56,8 @@ function readDb(): Database {
       ...emptyDb(),
       ...parsed,
       settings: { ...defaultSettings(), ...parsed.settings },
-      watches: parsed.watches ?? [],
-      jobs: parsed.jobs ?? [],
+      watches: (parsed.watches ?? []).map(normalizeWatch),
+      jobs: (parsed.jobs ?? []).map(normalizeJob),
       notices: parsed.notices ?? [],
       feedCache: parsed.feedCache ?? {},
       feedStatus: parsed.feedStatus ?? {},

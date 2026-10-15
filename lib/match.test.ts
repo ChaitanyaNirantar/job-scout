@@ -11,6 +11,8 @@ function watch(overrides: Partial<Watch> = {}): Watch {
     location: "",
     exclude: "",
     remoteOnly: false,
+    sponsorship: "any",
+    newGradOnly: false,
     enabled: true,
     createdAt: "2026-10-15T00:00:00.000Z",
     ...overrides,
@@ -119,5 +121,75 @@ describe("jobMatchesWatch", () => {
       watch({ keywords: "product designer" }),
     );
     assert.equal(hit, false);
+  });
+
+  it("treats United States as US cities and states", () => {
+    const places = watch({ keywords: "software engineer", location: "United States" });
+    assert.equal(
+      jobMatchesWatch(
+        {
+          title: "Software Engineer",
+          company: "Northwind",
+          location: "San Francisco, CA",
+          tags: [],
+          remote: false,
+        },
+        places,
+      ),
+      true,
+    );
+    assert.equal(
+      jobMatchesWatch(
+        {
+          title: "Software Engineer",
+          company: "Northwind",
+          location: "Berlin, Germany",
+          tags: [],
+          remote: false,
+        },
+        places,
+      ),
+      false,
+    );
+    assert.equal(
+      jobMatchesWatch(
+        {
+          title: "Software Engineer",
+          company: "Northwind",
+          location: "Remote",
+          tags: [],
+          remote: true,
+        },
+        places,
+      ),
+      false,
+    );
+  });
+
+  it("keeps visa sponsorship and new-grad filters independent of the role words", () => {
+    const role = {
+      title: "New Grad Product Designer",
+      company: "Northwind",
+      location: "Remote",
+      tags: [],
+      remote: true,
+      sponsorship: "explicit" as const,
+      newGrad: true,
+    };
+    assert.equal(jobMatchesWatch(role, watch({ sponsorship: "required", newGradOnly: true })), true);
+    assert.equal(
+      jobMatchesWatch(
+        { ...role, sponsorship: "unknown", newGrad: true },
+        watch({ sponsorship: "required" }),
+      ),
+      false,
+    );
+    assert.equal(
+      jobMatchesWatch(
+        { title: "Senior Product Designer", company: "Northwind", location: "Remote", tags: [], remote: true, newGrad: false },
+        watch({ newGradOnly: true }),
+      ),
+      false,
+    );
   });
 });

@@ -13,6 +13,8 @@ export type WatchDraft = {
   location: string;
   exclude: string;
   remoteOnly: boolean;
+  sponsorship: "any" | "required";
+  newGradOnly: boolean;
 };
 
 const SUGGESTIONS: { label: string; keywords: string }[] = [
@@ -40,13 +42,17 @@ export function WatchForm({
   const [location, setLocation] = useState(initial?.location ?? "");
   const [exclude, setExclude] = useState(initial?.exclude ?? "");
   const [remoteOnly, setRemoteOnly] = useState(initial?.remoteOnly ?? false);
+  const [sponsorship, setSponsorship] = useState<"any" | "required">(
+    initial?.sponsorship === "required" ? "required" : "any",
+  );
+  const [newGradOnly, setNewGradOnly] = useState(initial?.newGradOnly ?? false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     try {
-      await onSubmit({ name, keywords, location, exclude, remoteOnly });
+      await onSubmit({ name, keywords, location, exclude, remoteOnly, sponsorship, newGradOnly });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Couldn’t save that watch.");
     }
@@ -92,7 +98,11 @@ export function WatchForm({
           className="h-10 bg-card"
         />
       </Field>
-      <Field label="Places" htmlFor={`${formId}-where`} hint="Leave blank for anywhere. Commas mean either place.">
+      <Field
+        label="Places"
+        htmlFor={`${formId}-where`}
+        hint="Leave blank for anywhere. Commas mean either place. United States matches US cities and states."
+      >
         <Input
           id={`${formId}-where`}
           value={location}
@@ -119,6 +129,34 @@ export function WatchForm({
           checked={remoteOnly}
           onCheckedChange={setRemoteOnly}
           aria-label="Remote only"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`${formId}-sponsorship`}>Visa sponsorship</Label>
+        <select
+          id={`${formId}-sponsorship`}
+          className="h-10 rounded-lg border border-input bg-card px-2.5 text-sm"
+          value={sponsorship}
+          onChange={(event) => setSponsorship(event.target.value === "required" ? "required" : "any")}
+        >
+          <option value="any">Any role</option>
+          <option value="required">Only roles that sponsor</option>
+        </select>
+        <p className="text-xs text-muted-foreground">
+          Sponsored means the posting says so, LinkedIn is searched for visa sponsorship, or Jobright marked it as an H-1B role.
+        </p>
+      </div>
+      <div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-3 py-3">
+        <div>
+          <p className="text-sm font-medium">New grad only</p>
+          <p className="text-xs text-muted-foreground">
+            Entry-level and new-graduate roles. Senior, staff, and director titles are skipped.
+          </p>
+        </div>
+        <Switch
+          checked={newGradOnly}
+          onCheckedChange={setNewGradOnly}
+          aria-label="New grad only"
         />
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}

@@ -402,7 +402,7 @@ export function Desk() {
               <h2 className="mt-2 font-heading text-4xl leading-tight">What should Brief look for?</h2>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
                 Name the roles you want. Every day, Brief reads the newest postings and notifies you when one fits.
-                These boards lean toward tech, design, and business roles.
+                You can limit a watch to visa sponsorship, new-grad roles, or both.
               </p>
               <div className="mt-6">
                 <WatchForm
@@ -522,7 +522,8 @@ export function Desk() {
               </a>
             </span>
           ))}
-          . Open a role to view the original posting. Brief reads those boards a few times a day at most, and the
+          . Open a role to view the original posting. LinkedIn is searched for the titles you save. Jobright comes from
+          the daily new-grad and H-1B lists they publish. Brief reads each board a few times a day at most, and the
           daily notification runs while this app is open — if it was asleep, it catches up next time it starts.
         </p>
       </footer>
@@ -602,6 +603,8 @@ function watchDetail(watch: Watch) {
   const bits = [watch.keywords];
   if (watch.location) bits.push(watch.location);
   if (watch.remoteOnly) bits.push("remote only");
+  if (watch.sponsorship === "required") bits.push("visa sponsorship");
+  if (watch.newGradOnly) bits.push("new grad");
   if (!watch.enabled) bits.push("paused");
   return bits.join(" · ");
 }

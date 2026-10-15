@@ -1,9 +1,15 @@
 export type SourceId =
+  | "linkedin"
+  | "jobright"
   | "himalayas"
   | "remoteok"
   | "jobicy"
   | "arbeitnow"
   | "remotive";
+
+export type Sponsorship = "explicit" | "likely" | "none" | "unknown";
+
+export type SponsorshipFilter = "any" | "required";
 
 export type JobStatus = "new" | "saved" | "dismissed";
 
@@ -14,6 +20,8 @@ export type Watch = {
   location: string;
   exclude: string;
   remoteOnly: boolean;
+  sponsorship: SponsorshipFilter;
+  newGradOnly: boolean;
   enabled: boolean;
   createdAt: string;
 };
@@ -29,6 +37,8 @@ export type FeedJob = {
   tags: string[];
   salary: string | null;
   remote: boolean;
+  sponsorship: Sponsorship;
+  newGrad: boolean;
   postedAt: string;
 };
 
@@ -66,6 +76,7 @@ export type Settings = {
 export type FeedSnapshot = {
   fetchedAt: string;
   jobs: FeedJob[];
+  queryKey?: string;
 };
 
 export type FeedStatus = {
@@ -117,5 +128,7 @@ export type WatchInput = {
   location?: string;
   exclude?: string;
   remoteOnly?: boolean;
+  sponsorship?: SponsorshipFilter;
+  newGradOnly?: boolean;
   enabled?: boolean;
 };

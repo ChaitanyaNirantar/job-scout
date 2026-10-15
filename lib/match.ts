@@ -24,10 +24,138 @@ function locationSynonyms(place: string): string[] {
   return [place, ...(PLACE_ALIASES[normalized] ?? [])];
 }
 
+const US_COUNTRY = new Set(["united states", "united states of america", "usa", "us", "u s", "u s a"]);
+
+const US_STATE_NAMES = [
+  "alabama",
+  "alaska",
+  "arizona",
+  "arkansas",
+  "california",
+  "colorado",
+  "connecticut",
+  "delaware",
+  "florida",
+  "georgia",
+  "hawaii",
+  "idaho",
+  "illinois",
+  "indiana",
+  "iowa",
+  "kansas",
+  "kentucky",
+  "louisiana",
+  "maine",
+  "maryland",
+  "massachusetts",
+  "michigan",
+  "minnesota",
+  "mississippi",
+  "missouri",
+  "montana",
+  "nebraska",
+  "nevada",
+  "new hampshire",
+  "new jersey",
+  "new mexico",
+  "new york",
+  "north carolina",
+  "north dakota",
+  "ohio",
+  "oklahoma",
+  "oregon",
+  "pennsylvania",
+  "rhode island",
+  "south carolina",
+  "south dakota",
+  "tennessee",
+  "texas",
+  "utah",
+  "vermont",
+  "virginia",
+  "washington",
+  "west virginia",
+  "wisconsin",
+  "wyoming",
+  "district of columbia",
+];
+
+const US_STATE_CODES = [
+  "al",
+  "ak",
+  "az",
+  "ar",
+  "ca",
+  "co",
+  "ct",
+  "dc",
+  "fl",
+  "ga",
+  "hi",
+  "ia",
+  "id",
+  "il",
+  "in",
+  "ks",
+  "ky",
+  "la",
+  "ma",
+  "md",
+  "me",
+  "mi",
+  "mn",
+  "mo",
+  "ms",
+  "mt",
+  "nc",
+  "nd",
+  "ne",
+  "nh",
+  "nj",
+  "nm",
+  "nv",
+  "ny",
+  "oh",
+  "ok",
+  "or",
+  "pa",
+  "ri",
+  "sc",
+  "sd",
+  "tn",
+  "tx",
+  "ut",
+  "va",
+  "vt",
+  "wa",
+  "wi",
+  "wv",
+  "wy",
+];
+
+function isUnitedStates(place: string): boolean {
+  return US_COUNTRY.has(normalize(place));
+}
+
+function inUnitedStates(location: string): boolean {
+  const hay = normalize(location);
+  if (!hay) return false;
+  if (hay.includes("united states") || hay.split(" ").includes("usa")) return true;
+  if (US_STATE_NAMES.some((state) => hay.includes(state))) return true;
+  const words = new Set(hay.split(" ").filter(Boolean));
+  return US_STATE_CODES.some((code) => words.has(code));
+}
+
+function placeHits(location: string, place: string): boolean {
+  if (locationSynonyms(place).some((synonym) => includesPhrase(location, synonym))) return true;
+  return isUnitedStates(place) && inUnitedStates(location);
+}
+
 export type MatchableJob = Pick<
   FeedJob,
   "title" | "company" | "location" | "tags" | "remote"
->;
+> &
+  Partial<Pick<FeedJob, "sponsorship" | "newGrad">>;
 
 function includesWord(haystack: string, word: string): boolean {
   const needle = normalize(word);
@@ -51,12 +179,15 @@ export function jobMatchesWatch(job: MatchableJob, watch: Watch): boolean {
   const phrases = splitList(watch.keywords);
   if (phrases.length === 0) return false;
   if (watch.remoteOnly && !job.remote) return false;
+  if (watch.sponsorship === "required") {
+    const sponsorship = job.sponsorship ?? "unknown";
+    if (sponsorship !== "explicit" && sponsorship !== "likely") return false;
+  }
+  if (watch.newGradOnly && !job.newGrad) return false;
 
   const places = splitList(watch.location);
   if (places.length > 0) {
-    const matched = places.some((place) =>
-      locationSynonyms(place).some((synonym) => includesPhrase(job.location, synonym)),
-    );
+    const matched = places.some((place) => placeHits(job.location, place));
     if (!matched) return false;
   }
 

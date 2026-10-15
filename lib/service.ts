@@ -50,6 +50,8 @@ function parseWatch(input: WatchInput, current?: Watch): Watch {
     location: cleanText(input.location ?? current?.location ?? "", 80),
     exclude: cleanText(input.exclude ?? current?.exclude ?? "", 160),
     remoteOnly: input.remoteOnly ?? current?.remoteOnly ?? false,
+    sponsorship: input.sponsorship ?? current?.sponsorship ?? "any",
+    newGradOnly: input.newGradOnly ?? current?.newGradOnly ?? false,
     enabled: input.enabled ?? current?.enabled ?? true,
     createdAt: current?.createdAt ?? new Date().toISOString(),
   };

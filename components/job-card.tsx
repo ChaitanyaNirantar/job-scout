@@ -36,6 +36,9 @@ export function JobCard({
         {job.status === "saved" && <Badge variant="secondary">Saved</Badge>}
         {job.status === "dismissed" && <Badge variant="outline">Dismissed</Badge>}
         {job.remote && <Badge variant="outline">Remote</Badge>}
+        {job.newGrad && <Badge variant="outline">New grad</Badge>}
+        {job.sponsorship === "explicit" && <Badge variant="outline">Sponsors</Badge>}
+        {job.sponsorship === "likely" && <Badge variant="outline">Sponsorship likely</Badge>}
         <span>via {sourceLabel(job.source)}</span>
         {posted && <span>· {posted}</span>}
       </div>

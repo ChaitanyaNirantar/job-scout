@@ -1,6 +1,8 @@
 import type { SourceId } from "@/lib/types";
 
 export const SOURCES: { id: SourceId; label: string; home: string }[] = [
+  { id: "linkedin", label: "LinkedIn", home: "https://www.linkedin.com/jobs" },
+  { id: "jobright", label: "Jobright", home: "https://jobright.ai" },
   { id: "himalayas", label: "Himalayas", home: "https://himalayas.app" },
   { id: "remoteok", label: "Remote OK", home: "https://remoteok.com" },
   { id: "jobicy", label: "Jobicy", home: "https://jobicy.com" },
