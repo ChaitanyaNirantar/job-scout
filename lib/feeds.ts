@@ -1,0 +1,295 @@
+import { sourceLabel } from "@/lib/sources";
+import { excerpt } from "@/lib/text";
+import type { Database, FeedJob, SourceId } from "@/lib/types";
+
+const USER_AGENT = "Mozilla/5.0 (compatible; BriefJobWatch/1.0)";
+const MAX_AGE_MS = 21 * 24 * 60 * 60 * 1000;
+export const FEED_TTL_MS = 6 * 60 * 60 * 1000;
+
+type SourceFetcher = {
+  id: SourceId;
+  fetch: () => Promise<FeedJob[]>;
+};
+
+async function fetchJson(url: string): Promise<unknown> {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": USER_AGENT,
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!response.ok) {
+    throw new Error(`replied ${response.status}`);
+  }
+  return response.json();
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function str(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function tagsOf(value: unknown): string[] {
+  return asArray(value)
+    .map((item) => str(item))
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function fromUnix(value: unknown): string | null {
+  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  const ms = numeric > 10_000_000_000 ? numeric : numeric * 1000;
+  const date = new Date(ms);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function fromIso(value: unknown): string | null {
+  const text = str(value);
+  if (!text) return null;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function money(min: number | null, max: number | null, currency = "USD"): string | null {
+  const lower = min && min > 0 ? min : null;
+  const upper = max && max > 0 ? max : null;
+  if (!lower && !upper) return null;
+  let format: (amount: number) => string;
+  try {
+    format = (amount) =>
+      new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency || "USD",
+        maximumFractionDigits: 0,
+      }).format(amount);
+  } catch {
+    format = (amount) => `$${Math.round(amount).toLocaleString("en-US")}`;
+  }
+  if (lower && upper && lower !== upper) return `${format(lower)}–${format(upper)}`;
+  return format(lower ?? upper ?? 0);
+}
+
+function recent(job: FeedJob): boolean {
+  const posted = new Date(job.postedAt).getTime();
+  if (Number.isNaN(posted)) return false;
+  return Date.now() - posted <= MAX_AGE_MS && posted <= Date.now() + 60 * 60 * 1000;
+}
+
+function keep(jobs: FeedJob[]): FeedJob[] {
+  const seen = new Set<string>();
+  const kept: FeedJob[] = [];
+  for (const job of jobs) {
+    if (!job.title || !job.url || !job.id) continue;
+    if (!recent(job)) continue;
+    if (seen.has(job.id)) continue;
+    seen.add(job.id);
+    kept.push(job);
+  }
+  return kept;
+}
+
+async function fetchHimalayas(): Promise<FeedJob[]> {
+  const jobs: FeedJob[] = [];
+  let cursor = "";
+  for (let page = 0; page < 3; page += 1) {
+    const url = new URL("https://himalayas.app/jobs/api");
+    url.searchParams.set("limit", "20");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const data = asRecord(await fetchJson(url.toString()));
+    for (const item of asArray(data?.jobs)) {
+      const record = asRecord(item);
+      if (!record) continue;
+      const title = str(record.title);
+      const link = str(record.applicationLink) || str(record.guid);
+      const min = typeof record.minSalary === "number" ? record.minSalary : null;
+      const max = typeof record.maxSalary === "number" ? record.maxSalary : null;
+      const places = asArray(record.locationRestrictions).map((place) => str(place)).filter(Boolean);
+      jobs.push({
+        id: `himalayas:${(link || title).split("/").filter(Boolean).slice(-2).join("-")}`,
+        source: "himalayas",
+        title,
+        company: str(record.companyName),
+        location: places.join(", ") || "Remote",
+        url: link,
+        excerpt: excerpt(str(record.excerpt) || str(record.description)),
+        tags: tagsOf(record.parentCategories).concat(tagsOf(record.categories)).slice(0, 8),
+        salary: money(min, max, str(record.currency) || "USD"),
+        remote: true,
+        postedAt: fromUnix(record.pubDate) ?? new Date().toISOString(),
+      });
+    }
+    cursor = str(data?.nextCursor);
+    if (!cursor) break;
+  }
+  return keep(jobs);
+}
+
+async function fetchRemoteOk(): Promise<FeedJob[]> {
+  const data = await fetchJson("https://remoteok.com/api");
+  const jobs = asArray(data).flatMap((item) => {
+    const record = asRecord(item);
+    if (!record || !str(record.position)) return [];
+    const id = str(record.id) || str(record.slug);
+    const min = typeof record.salary_min === "number" ? record.salary_min : null;
+    const max = typeof record.salary_max === "number" ? record.salary_max : null;
+    const job: FeedJob = {
+      id: `remoteok:${id}`,
+      source: "remoteok",
+      title: str(record.position),
+      company: str(record.company),
+      location: str(record.location) || "Remote",
+      url: str(record.url) || str(record.apply_url),
+      excerpt: excerpt(str(record.description)),
+      tags: tagsOf(record.tags),
+      salary: money(min, max),
+      remote: true,
+      postedAt: fromIso(record.date) ?? fromUnix(record.epoch) ?? new Date().toISOString(),
+    };
+    return [job];
+  });
+  return keep(jobs);
+}
+
+async function fetchJobicy(): Promise<FeedJob[]> {
+  const data = asRecord(await fetchJson("https://jobicy.com/api/v2/remote-jobs?count=50"));
+  const jobs = asArray(data?.jobs).flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) return [];
+    const id = String(record.id ?? "");
+    const job: FeedJob = {
+      id: `jobicy:${id}`,
+      source: "jobicy",
+      title: str(record.jobTitle),
+      company: str(record.companyName),
+      location: str(record.jobGeo) || "Remote",
+      url: str(record.url),
+      excerpt: excerpt(str(record.jobExcerpt) || str(record.jobDescription)),
+      tags: tagsOf(record.jobIndustry),
+      salary: null,
+      remote: true,
+      postedAt: fromIso(record.pubDate) ?? new Date().toISOString(),
+    };
+    return [job];
+  });
+  return keep(jobs);
+}
+
+async function fetchArbeitnow(): Promise<FeedJob[]> {
+  const data = asRecord(await fetchJson("https://www.arbeitnow.com/api/job-board-api"));
+  const jobs = asArray(data?.data).flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) return [];
+    const slug = str(record.slug);
+    const job: FeedJob = {
+      id: `arbeitnow:${slug}`,
+      source: "arbeitnow",
+      title: str(record.title),
+      company: str(record.company_name),
+      location: str(record.location),
+      url: str(record.url),
+      excerpt: excerpt(str(record.description)),
+      tags: tagsOf(record.tags),
+      salary: null,
+      remote: record.remote === true,
+      postedAt: fromUnix(record.created_at) ?? new Date().toISOString(),
+    };
+    return [job];
+  });
+  return keep(jobs);
+}
+
+async function fetchRemotive(): Promise<FeedJob[]> {
+  const data = asRecord(await fetchJson("https://remotive.com/api/remote-jobs"));
+  const jobs = asArray(data?.jobs).flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) return [];
+    const id = String(record.id ?? "");
+    const salary = str(record.salary);
+    const job: FeedJob = {
+      id: `remotive:${id}`,
+      source: "remotive",
+      title: str(record.title),
+      company: str(record.company_name),
+      location: str(record.candidate_required_location) || "Remote",
+      url: str(record.url),
+      excerpt: excerpt(str(record.description)),
+      tags: tagsOf(record.tags),
+      salary: salary || null,
+      remote: true,
+      postedAt: fromIso(record.publication_date) ?? new Date().toISOString(),
+    };
+    return [job];
+  });
+  return keep(jobs);
+}
+
+const FETCHERS: SourceFetcher[] = [
+  { id: "himalayas", fetch: fetchHimalayas },
+  { id: "remoteok", fetch: fetchRemoteOk },
+  { id: "jobicy", fetch: fetchJobicy },
+  { id: "arbeitnow", fetch: fetchArbeitnow },
+  { id: "remotive", fetch: fetchRemotive },
+];
+
+export async function refreshFeeds(db: Database): Promise<void> {
+  const now = Date.now();
+  await Promise.all(
+    FETCHERS.map(async (source) => {
+      const cached = db.feedCache[source.id];
+      const fetchedAt = cached ? new Date(cached.fetchedAt).getTime() : 0;
+      if (cached && now - fetchedAt < FEED_TTL_MS) {
+        db.feedStatus[source.id] = {
+          fetchedAt: cached.fetchedAt,
+          count: cached.jobs.length,
+          error: null,
+        };
+        return;
+      }
+      try {
+        const jobs = await source.fetch();
+        const stamp = new Date().toISOString();
+        db.feedCache[source.id] = { fetchedAt: stamp, jobs };
+        db.feedStatus[source.id] = { fetchedAt: stamp, count: jobs.length, error: null };
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "didn’t respond";
+        db.feedStatus[source.id] = {
+          fetchedAt: cached?.fetchedAt ?? null,
+          count: cached?.jobs.length ?? 0,
+          error: `${sourceLabel(source.id)} ${reason}.`,
+        };
+      }
+    }),
+  );
+}
+
+export function cachedJobs(db: Database): FeedJob[] {
+  const seenUrls = new Set<string>();
+  const seenLoose = new Set<string>();
+  const jobs: FeedJob[] = [];
+  for (const source of FETCHERS) {
+    for (const job of db.feedCache[source.id]?.jobs ?? []) {
+      const urlKey = job.url.toLowerCase();
+      const loose = `${job.company.toLowerCase()}|${job.title.toLowerCase()}`;
+      if (seenUrls.has(urlKey) || seenLoose.has(loose)) continue;
+      seenUrls.add(urlKey);
+      seenLoose.add(loose);
+      jobs.push(job);
+    }
+  }
+  return jobs;
+}
