@@ -106,4 +106,18 @@ describe("jobMatchesWatch", () => {
       false,
     );
   });
+
+  it("does not match a longer word that merely contains one of the terms", () => {
+    const hit = jobMatchesWatch(
+      {
+        title: "Graphic Designer (Promo)",
+        company: "Neo Group",
+        location: "Serbia",
+        tags: ["Promotional-Products-Designer", "Graphic-Designer"],
+        remote: true,
+      },
+      watch({ keywords: "product designer" }),
+    );
+    assert.equal(hit, false);
+  });
 });

@@ -1,4 +1,5 @@
-import { includesPhrase, normalize, splitList } from "@/lib/text";
+import type { FeedJob, Watch } from "@/lib/types";
+import { compact, includesPhrase, normalize, splitList } from "@/lib/text";
 
 const PLACE_ALIASES: Record<string, string[]> = {
   munich: ["munchen", "muenchen"],
@@ -22,20 +23,28 @@ function locationSynonyms(place: string): string[] {
   const normalized = normalize(place);
   return [place, ...(PLACE_ALIASES[normalized] ?? [])];
 }
-import type { FeedJob, Watch } from "@/lib/types";
 
 export type MatchableJob = Pick<
   FeedJob,
   "title" | "company" | "location" | "tags" | "remote"
 >;
 
+function includesWord(haystack: string, word: string): boolean {
+  const needle = normalize(word);
+  if (!needle) return false;
+  const words = normalize(haystack).split(" ").filter(Boolean);
+  if (words.includes(needle)) return true;
+  const packed = compact(word);
+  return words.some((entry) => compact(entry) === packed);
+}
+
 function phraseHits(job: MatchableJob, phrase: string): boolean {
   if (includesPhrase(job.title, phrase)) return true;
   if (job.tags.some((tag) => includesPhrase(tag, phrase))) return true;
   const words = normalize(phrase).split(" ").filter(Boolean);
   if (words.length < 2) return false;
-  const blob = normalize(`${job.title} ${job.tags.join(" ")}`);
-  return words.every((word) => includesPhrase(blob, word));
+  const blob = `${job.title} ${job.tags.join(" ")}`;
+  return words.every((word) => includesWord(blob, word));
 }
 
 export function jobMatchesWatch(job: MatchableJob, watch: Watch): boolean {
