@@ -18,6 +18,10 @@ describe("signals", () => {
     assert.equal(detectNewGrad("Software Engineer II"), false);
     assert.equal(detectNewGrad("Software Engineer III"), false);
     assert.equal(detectNewGrad("Software Engineer, 2027 New Grad"), true);
+    assert.equal(detectNewGrad("Data Analyst, 2027"), true);
+    assert.equal(detectNewGrad("Class of 2027 Data Scientist"), true);
+    assert.equal(detectNewGrad("Data Analyst"), false);
+    assert.equal(detectSponsorship("Data Analyst (Ads & Sponsorships)"), "unknown");
     assert.equal(detectNewGrad("Software Engineer"), false);
   });
 });

@@ -38,7 +38,7 @@ function deriveName(keywords: string, name: string): string {
 }
 
 function parseWatch(input: WatchInput, current?: Watch): Watch {
-  const keywords = cleanText(input.keywords ?? current?.keywords, 180);
+  const keywords = cleanText(input.keywords ?? current?.keywords, 240);
   if (keywords.length < 2) {
     throw new ServiceError(400, "Add at least one role, like “product designer”.");
   }
@@ -47,7 +47,7 @@ function parseWatch(input: WatchInput, current?: Watch): Watch {
     id: current?.id ?? randomUUID(),
     name,
     keywords,
-    location: cleanText(input.location ?? current?.location ?? "", 80),
+    location: cleanText(input.location ?? current?.location ?? "", 160),
     exclude: cleanText(input.exclude ?? current?.exclude ?? "", 160),
     remoteOnly: input.remoteOnly ?? current?.remoteOnly ?? false,
     sponsorship: input.sponsorship ?? current?.sponsorship ?? "any",

@@ -47,6 +47,15 @@ const NEW_GRAD = [
   "college graduate",
   "campus hire",
   "graduate role",
+  "class of 2026",
+  "class of 2027",
+  "class of 2028",
+  "2026 grad",
+  "2027 grad",
+  "2028 grad",
+  "2026 start",
+  "2027 start",
+  "2028 start",
 ];
 
 const SENIOR = ["senior", "staff", "principal", "director", "head", "sr", "snr"];
@@ -97,7 +106,10 @@ export function isLeveledTitle(title: string): boolean {
 export function mentionsNewGrad(text: string): boolean {
   const normalized = hay(text);
   if (NEW_GRAD.some((phrase) => normalized.includes(hay(phrase)))) return true;
-  return normalized.split(" ").includes("junior");
+  const words = normalized.split(" ");
+  if (words.includes("junior")) return true;
+  const title = hay(text.split("\n")[0] ?? text);
+  return /\b20(26|27|28)\b/.test(title);
 }
 
 export function detectNewGrad(text: string): boolean {

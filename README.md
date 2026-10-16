@@ -4,7 +4,7 @@ Brief is a personal job watch. You write down the roles you want. Once a day it 
 
 It is a daily net for fresh listings, not a search of every job on the internet. It reads [LinkedIn](https://www.linkedin.com/jobs) for your titles, the daily new-grad and H-1B lists [Jobright](https://jobright.ai) publishes, plus [Himalayas](https://himalayas.app), [Remote OK](https://remoteok.com), [Jobicy](https://jobicy.com), [Arbeitnow](https://www.arbeitnow.com), and [Remotive](https://remotive.com). Each role opens the original posting.
 
-A watch can require visa sponsorship, new-grad roles, or both. Sponsorship keeps postings that say they sponsor, LinkedIn results from a visa-sponsorship search, and Jobright’s H-1B list. New grad keeps entry-level and new-graduate titles, including Jobright’s new-grad lists and LinkedIn’s entry-level filter. Senior, staff, and director titles are left out of a new-grad watch. A place of United States also matches US cities and states. Leave the place blank to include remote roles with no city.
+A watch can require visa sponsorship, entry-level and class-of-2027 roles, or both. Sponsorship keeps postings that say they sponsor, LinkedIn results from a visa-sponsorship search, and Jobright’s H-1B list. Entry level keeps new-graduate and 2027 titles, including Jobright’s new-grad lists and LinkedIn’s entry-level filter. Senior, staff, and director titles are left out. The data-role starter watches data analyst, data scientist, data engineer, analytics engineer, and business intelligence roles with both filters on. Location accepts several places, and United States also matches US cities and states. Leave location blank to include roles with no city.
 
 ## Run it
 

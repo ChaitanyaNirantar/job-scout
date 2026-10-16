@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import type { Watch } from "@/lib/types";
 
 export type WatchDraft = {
@@ -17,11 +18,36 @@ export type WatchDraft = {
   newGradOnly: boolean;
 };
 
-const SUGGESTIONS: { label: string; keywords: string }[] = [
+const DATA_ROLES =
+  "data analyst, data scientist, data science, data engineer, analytics engineer, business intelligence";
+
+const LOCATIONS = ["United States", "New York", "San Francisco", "Seattle", "Austin", "Boston", "Chicago"];
+
+const SUGGESTIONS: {
+  label: string;
+  keywords: string;
+  name?: string;
+  sponsorship?: "any" | "required";
+  newGradOnly?: boolean;
+}[] = [
   { label: "Product designer", keywords: "product designer, brand designer" },
   { label: "Frontend engineer", keywords: "frontend engineer, react" },
   { label: "Account executive", keywords: "account executive" },
+  {
+    label: "Data roles, 2027, sponsored",
+    name: "Data roles",
+    keywords: DATA_ROLES,
+    sponsorship: "required",
+    newGradOnly: true,
+  },
 ];
+
+function splitPlaces(value: string): string[] {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
 
 export function WatchForm({
   initial,
@@ -70,7 +96,9 @@ export function WatchForm({
               className="h-8 bg-card"
               onClick={() => {
                 setKeywords(suggestion.keywords);
-                if (!name) setName(suggestion.label);
+                if (suggestion.sponsorship) setSponsorship(suggestion.sponsorship);
+                if (suggestion.newGradOnly !== undefined) setNewGradOnly(suggestion.newGradOnly);
+                if (!name) setName(suggestion.name ?? suggestion.label);
               }}
             >
               {suggestion.label}
@@ -79,12 +107,12 @@ export function WatchForm({
         </div>
       )}
       <Field label="Roles" htmlFor={`${formId}-roles`} hint="Separate alternatives with commas.">
-        <Input
+        <Textarea
           id={`${formId}-roles`}
           value={keywords}
           onChange={(event) => setKeywords(event.target.value)}
           placeholder="product designer, brand designer"
-          className="h-10 bg-card"
+          className="min-h-16 bg-card"
           required
           minLength={2}
         />
@@ -99,10 +127,33 @@ export function WatchForm({
         />
       </Field>
       <Field
-        label="Places"
+        label="Location"
         htmlFor={`${formId}-where`}
         hint="Leave blank for anywhere. Commas mean either place. United States matches US cities and states."
       >
+        <div className="flex flex-wrap gap-2">
+          {LOCATIONS.map((place) => {
+            const selected = splitPlaces(location).some((item) => item.toLowerCase() === place.toLowerCase());
+            return (
+              <Button
+                key={place}
+                type="button"
+                variant={selected ? "default" : "outline"}
+                className={selected ? "h-8" : "h-8 bg-card"}
+                aria-pressed={selected}
+                onClick={() => {
+                  const current = splitPlaces(location);
+                  const next = selected
+                    ? current.filter((item) => item.toLowerCase() !== place.toLowerCase())
+                    : [...current, place];
+                  setLocation(next.join(", "));
+                }}
+              >
+                {place}
+              </Button>
+            );
+          })}
+        </div>
         <Input
           id={`${formId}-where`}
           value={location}
@@ -148,9 +199,9 @@ export function WatchForm({
       </div>
       <div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-3 py-3">
         <div>
-          <p className="text-sm font-medium">New grad only</p>
+          <p className="text-sm font-medium">Entry level and 2027 grads</p>
           <p className="text-xs text-muted-foreground">
-            Entry-level and new-graduate roles. Senior, staff, and director titles are skipped.
+            New-graduate, entry-level, and class-of-2027 roles. Senior, staff, and director titles are skipped.
           </p>
         </div>
         <Switch

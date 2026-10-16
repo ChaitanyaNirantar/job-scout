@@ -58,14 +58,20 @@ export function parseLinkedInHtml(
   return jobs;
 }
 
+export function linkedInKeywords(search: BoardSearch): string {
+  const parts = [search.phrase];
+  if (search.gradYear) parts.push("2027");
+  if (search.sponsorship) parts.push("visa sponsorship");
+  return parts.join(" ");
+}
+
 async function fetchPage(search: BoardSearch): Promise<DraftJob[]> {
   const url = new URL("https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search");
-  const keywords = search.sponsorship ? `${search.phrase} visa sponsorship` : search.phrase;
-  url.searchParams.set("keywords", keywords);
+  url.searchParams.set("keywords", linkedInKeywords(search));
   if (search.location) url.searchParams.set("location", search.location);
   url.searchParams.set("start", "0");
-  url.searchParams.set("f_TPR", "r604800");
-  if (search.newGrad) url.searchParams.set("f_E", "2");
+  url.searchParams.set("f_TPR", "r1814400");
+  if (search.newGrad && !search.gradYear) url.searchParams.set("f_E", "2");
   if (search.remoteOnly) url.searchParams.set("f_WT", "2");
   const response = await fetch(url, {
     headers: {
@@ -88,18 +94,20 @@ function sleep(ms: number) {
 
 export async function fetchLinkedInJobs(
   searches: BoardSearch[],
-): Promise<{ jobs: DraftJob[]; error: string | null }> {
+): Promise<{ jobs: DraftJob[]; error: string | null; completed: number }> {
   const jobs: DraftJob[] = [];
+  let completed = 0;
   let error: string | null = null;
   for (let index = 0; index < searches.length; index += 1) {
     if (index > 0) await sleep(2000);
     try {
       jobs.push(...(await fetchPage(searches[index])));
+      completed += 1;
     } catch (caught) {
       const reason = caught instanceof Error ? caught.message : "didn’t respond";
       error = `LinkedIn ${reason}.`;
       break;
     }
   }
-  return { jobs, error };
+  return { jobs, error, completed };
 }

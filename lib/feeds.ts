@@ -1,7 +1,7 @@
 import { fetchJobrightJobs } from "@/lib/jobright";
 import { fetchLinkedInJobs } from "@/lib/linkedin";
 import { keepJobs, type DraftJob } from "@/lib/normalize";
-import { searchKey, searchesFromWatches } from "@/lib/searches";
+import { completedSearches, remainingSearches, searchesFromWatches, type BoardSearch } from "@/lib/searches";
 import { sourceLabel, SOURCES } from "@/lib/sources";
 import { excerpt } from "@/lib/text";
 import type { Database, FeedJob, SourceId } from "@/lib/types";
@@ -254,13 +254,52 @@ async function refreshCached(
   }
   const stamp = new Date().toISOString();
   const jobs = keepJobs(result.jobs);
-  db.feedCache[id] = { fetchedAt: stamp, jobs, queryKey };
+  db.feedCache[id] = {
+    fetchedAt: stamp,
+    jobs,
+    // A partial reply, such as a LinkedIn 429 after the first page, should be tried again.
+    queryKey: result.error ? undefined : queryKey,
+  };
   db.feedStatus[id] = { fetchedAt: stamp, count: jobs.length, error: result.error };
+}
+
+const LINKEDIN_BATCH = 2;
+
+async function refreshLinkedIn(db: Database, desired: BoardSearch[]) {
+  const cached = db.feedCache.linkedin;
+  const fetchedAt = cached ? new Date(cached.fetchedAt).getTime() : 0;
+  const fresh = Boolean(cached) && Date.now() - fetchedAt < FEED_TTL_MS;
+  const done = fresh ? completedSearches(cached?.queryKey) : [];
+  const pending = remainingSearches(desired, done);
+  if (pending.length === 0) {
+    db.feedStatus.linkedin = {
+      fetchedAt: cached?.fetchedAt ?? null,
+      count: cached?.jobs.length ?? 0,
+      error: null,
+    };
+    return;
+  }
+  const batch = pending.slice(0, LINKEDIN_BATCH);
+  const result = await fetchLinkedInJobs(batch);
+  if (result.completed === 0 && result.error) {
+    db.feedStatus.linkedin = {
+      fetchedAt: cached?.fetchedAt ?? null,
+      count: cached?.jobs.length ?? 0,
+      error: result.error,
+    };
+    return;
+  }
+  const finished = [...done, ...batch.slice(0, result.completed)];
+  const jobs = keepJobs([...(cached?.jobs ?? []), ...result.jobs])
+    .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime())
+    .slice(0, 80);
+  const stamp = new Date().toISOString();
+  db.feedCache.linkedin = { fetchedAt: stamp, jobs, queryKey: JSON.stringify(finished) };
+  db.feedStatus.linkedin = { fetchedAt: stamp, count: jobs.length, error: result.error };
 }
 
 export async function refreshFeeds(db: Database): Promise<void> {
   const searches = searchesFromWatches(db.watches);
-  const linkedInKey = searchKey(searches);
   await Promise.all([
     ...FETCHERS.map(async (source) => {
       const cached = db.feedCache[source.id];
@@ -287,7 +326,7 @@ export async function refreshFeeds(db: Database): Promise<void> {
         };
       }
     }),
-    refreshCached(db, "linkedin", linkedInKey, () => fetchLinkedInJobs(searches)),
+    refreshLinkedIn(db, searches),
     refreshCached(db, "jobright", "published-lists", () => fetchJobrightJobs()),
   ]);
 }

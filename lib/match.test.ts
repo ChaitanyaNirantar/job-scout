@@ -166,6 +166,60 @@ describe("jobMatchesWatch", () => {
     );
   });
 
+  it("matches a sponsored 2027 data role in a chosen place", () => {
+    const data = watch({
+      keywords: "data analyst, data scientist, data engineer",
+      location: "Austin, Seattle",
+      sponsorship: "required",
+      newGradOnly: true,
+    });
+    assert.equal(
+      jobMatchesWatch(
+        {
+          title: "Data Analyst, 2027",
+          company: "Northwind",
+          location: "Austin, TX",
+          tags: [],
+          remote: false,
+          sponsorship: "likely",
+          newGrad: true,
+        },
+        data,
+      ),
+      true,
+    );
+    assert.equal(
+      jobMatchesWatch(
+        {
+          title: "Data Analyst (Ads & Sponsorships)",
+          company: "Northwind",
+          location: "Austin, TX",
+          tags: [],
+          remote: false,
+          sponsorship: "unknown",
+          newGrad: true,
+        },
+        data,
+      ),
+      false,
+    );
+    assert.equal(
+      jobMatchesWatch(
+        {
+          title: "Senior Data Scientist",
+          company: "Northwind",
+          location: "Seattle, WA",
+          tags: [],
+          remote: false,
+          sponsorship: "likely",
+          newGrad: false,
+        },
+        data,
+      ),
+      false,
+    );
+  });
+
   it("keeps visa sponsorship and new-grad filters independent of the role words", () => {
     const role = {
       title: "New Grad Product Designer",

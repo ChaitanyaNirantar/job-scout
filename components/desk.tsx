@@ -402,7 +402,7 @@ export function Desk() {
               <h2 className="mt-2 font-heading text-4xl leading-tight">What should Brief look for?</h2>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
                 Name the roles you want. Every day, Brief reads the newest postings and notifies you when one fits.
-                You can limit a watch to visa sponsorship, new-grad roles, or both.
+                You can limit a watch by location, visa sponsorship, and entry-level or class-of-2027 roles.
               </p>
               <div className="mt-6">
                 <WatchForm
@@ -534,7 +534,12 @@ export function Desk() {
             <DialogTitle className="font-heading text-2xl">New watch</DialogTitle>
             <DialogDescription>Brief compares fresh postings with this every day.</DialogDescription>
           </DialogHeader>
-          <WatchForm submitLabel="Start watching" pending={busy === "save"} onSubmit={createWatch} />
+          <WatchForm
+            showSuggestions
+            submitLabel="Start watching"
+            pending={busy === "save"}
+            onSubmit={createWatch}
+          />
         </DialogContent>
       </Dialog>
 
@@ -604,7 +609,7 @@ function watchDetail(watch: Watch) {
   if (watch.location) bits.push(watch.location);
   if (watch.remoteOnly) bits.push("remote only");
   if (watch.sponsorship === "required") bits.push("visa sponsorship");
-  if (watch.newGradOnly) bits.push("new grad");
+  if (watch.newGradOnly) bits.push("entry level / 2027");
   if (!watch.enabled) bits.push("paused");
   return bits.join(" · ");
 }
